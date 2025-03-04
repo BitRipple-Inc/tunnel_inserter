@@ -7,6 +7,7 @@ use std::os::unix::net::{UnixDatagram};
 use std::process::{Command, Stdio};
 
 use nix::sys::signal::{sigaction, SaFlags, SigSet, Signal, SigAction, SigHandler};
+use nix::sys::socket::{setsockopt, sockopt};
 
 use crate::sock_utils::set_cloexec;
 use crate::forward::{PortPair, forward};
@@ -105,8 +106,14 @@ fn main() -> Result<(), String> {
         // Add the port pair
         port_pairs.push(PortPair { local: l, remote: r });
 
-        // Add the local descriptor
+        // Create & configure the sockets
         let (lsock, rsock) = UnixDatagram::pair().unwrap();
+        setsockopt(&lsock, sockopt::RcvBuf, &2000000)
+            .expect("Can't set SO_RCVBUF");
+        setsockopt(&rsock, sockopt::RcvBuf, &2000000)
+            .expect("Can't set SO_RCVBUF");
+
+        // Add the local descriptor
         ldesc.push(lsock);
 
         // Add the remote descriptor
