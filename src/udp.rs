@@ -64,16 +64,20 @@ pub fn create_ipv4_udp_packet(
     packet[payload_offset..].copy_from_slice(payload);
 
     // Compute UDP Checksum (with pseudo-header)
-    let mut pseudo_header = Vec::new();
-    pseudo_header.extend_from_slice(&src_ip.octets());
-    pseudo_header.extend_from_slice(&dst_ip.octets());
-    pseudo_header.push(0); // Zero byte
-    pseudo_header.push(17); // Protocol (UDP)
-    pseudo_header.extend_from_slice(&(udp_length as u16).to_be_bytes());
-    pseudo_header.extend_from_slice(&packet[udp_offset..udp_offset + UDP_HEADER_LEN + payload.len()]);
+    if false {
+        let mut pseudo_header = Vec::new();
+        pseudo_header.extend_from_slice(&src_ip.octets());
+        pseudo_header.extend_from_slice(&dst_ip.octets());
+        pseudo_header.push(0); // Zero byte
+        pseudo_header.push(17); // Protocol (UDP)
+        pseudo_header.extend_from_slice(&(udp_length as u16).to_be_bytes());
+        pseudo_header.extend_from_slice(&packet[udp_offset..udp_offset + UDP_HEADER_LEN + payload.len()]);
 
-    let udp_checksum = checksum(&pseudo_header);
-    packet[udp_offset + 6..udp_offset + 8].copy_from_slice(&udp_checksum.to_be_bytes());
+        let udp_checksum = checksum(&pseudo_header);
+        packet[udp_offset + 6..udp_offset + 8].copy_from_slice(&udp_checksum.to_be_bytes());
+    } else {
+        packet[udp_offset + 6..udp_offset + 8].copy_from_slice(&[0, 0]);
+    }
 
     packet
 }
@@ -133,22 +137,24 @@ pub fn parse_ipv4_udp_packet(packet: &[u8]) -> Option<(Ipv4Addr, Ipv4Addr, u16, 
     let payload = &packet[udp_offset + UDP_HEADER_LEN..udp_offset + udp_length];
 
     // Compute UDP checksum (including pseudo-header)
-    let mut pseudo_header = Vec::new();
-    pseudo_header.extend_from_slice(&src_ip.octets());
-    pseudo_header.extend_from_slice(&dst_ip.octets());
-    pseudo_header.push(0);
-    pseudo_header.push(17); // Protocol (UDP)
-    pseudo_header.extend_from_slice(&(udp_length as u16).to_be_bytes());
-    pseudo_header.extend_from_slice(&packet[udp_offset..udp_offset + udp_length]);
+    if udp_checksum != 0 {
+        let mut pseudo_header = Vec::new();
+        pseudo_header.extend_from_slice(&src_ip.octets());
+        pseudo_header.extend_from_slice(&dst_ip.octets());
+        pseudo_header.push(0);
+        pseudo_header.push(17); // Protocol (UDP)
+        pseudo_header.extend_from_slice(&(udp_length as u16).to_be_bytes());
+        pseudo_header.extend_from_slice(&packet[udp_offset..udp_offset + udp_length]);
 
-    let computed_udp_checksum = checksum(&pseudo_header);
-    if udp_checksum != 0 && computed_udp_checksum != 0 {
-        println!(
-            "Invalid UDP checksum: Expected {}, Computed {}", 
-            udp_checksum, 
-            computed_udp_checksum
-        );
-        return None;
+        let computed_udp_checksum = checksum(&pseudo_header);
+        if udp_checksum != 0 && computed_udp_checksum != 0 {
+            println!(
+                "Invalid UDP checksum: Expected {}, Computed {}", 
+                udp_checksum, 
+                computed_udp_checksum
+            );
+            return None;
+        }
     }
 
     Some((src_ip, dst_ip, src_port, dst_port, payload))
