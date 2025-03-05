@@ -158,6 +158,9 @@ fn main() -> Result<(), String> {
             .expect("sigaction failed");
     };
 
+    // Close unused FDs
+    drop(rsocks);
+
     // Start the forwarder 
     println!("Starting the forwarder.");
     forward(fd_outside,
