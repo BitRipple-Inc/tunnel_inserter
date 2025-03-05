@@ -1,3 +1,4 @@
+use std::io::ErrorKind;
 use std::collections::HashMap;
 use std::os::unix::net::{UnixDatagram};
 use std::os::fd::{AsFd};
@@ -70,7 +71,15 @@ pub fn forward(outside: UnixDatagram,
                     remote_addr,
                     port_pairs[j].local,
                     port_pairs[j].remote);
-                outside.send(&pkt).expect("Send to outside failed");
+                match outside.send(&pkt) {
+                    Ok(_) => { },
+                    Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                        println!("drop when sending to outside");
+                    },
+                    Err(ref e) => {
+                        eprintln!("Sending to outside failed: {:?}", e);
+                    },
+                };
             } else if j == n { // outside
                 let sz = outside.recv(&mut buf).expect("recv failed");
                 //println!("Packet of size {} received from OUTSIDE", sz);
@@ -89,8 +98,15 @@ pub fn forward(outside: UnixDatagram,
                         match pp2idx.get( &PortPair { local: dst_port, remote: src_port } ) {
                             None => eprintln!("No matching port pair found"),
                             Some(&idx) => {
-                                sockets[idx].send(data)
-                                    .expect(format!("Send to fd {} failed", idx).as_str());
+                                match sockets[idx].send(data) {
+                                    Ok(_) => { },
+                                    Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                                        println!("drop when sending to fd{}", idx);
+                                    },
+                                    Err(ref e) => {
+                                      eprintln!("error when sending to fd{}: {:?}", idx, e);
+                                    },
+                                };
                             }
                         }
                     },

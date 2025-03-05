@@ -97,11 +97,13 @@ fn main() -> Result<(), String> {
     let fd_pipe = File::from(unsafe { OwnedFd::from_raw_fd(fd_pipe_i) });
     set_cloexec(fd_outside_i, true);
     set_cloexec(fd_pipe_i, true);
+    fd_outside.set_nonblocking(true)
+        .expect("Failed to make socket nonblocking");
 
     // Create the upward sockets
     let mut port_pairs : Vec<PortPair> = vec![];
-    let mut ldesc : Vec<UnixDatagram> = vec![];
-    let mut rdesc : Vec<UnixDatagram> = vec![];
+    let mut lsocks : Vec<UnixDatagram> = vec![];
+    let mut rsocks : Vec<UnixDatagram> = vec![];
     for (l, r) in local_ports.into_iter().zip(remote_ports) {
         // Add the port pair
         port_pairs.push(PortPair { local: l, remote: r });
@@ -114,18 +116,20 @@ fn main() -> Result<(), String> {
             .expect("Can't set SO_RCVBUF");
 
         // Add the local descriptor
-        ldesc.push(lsock);
+        lsock.set_nonblocking(true)
+            .expect("Failed to make socket nonblocking");
+        lsocks.push(lsock);
 
         // Add the remote descriptor
         set_cloexec(rsock.as_raw_fd(), false);
-        rdesc.push(rsock);
+        rsocks.push(rsock);
     }
 
     // Run the upwards command
     let argmap : HashMap<String, String> =
-        (0..(ldesc.len()))
+        (0..(lsocks.len()))
         .map(|j| {
-            let fd = rdesc[j].as_raw_fd();
+            let fd = rsocks[j].as_raw_fd();
             (format!("{{fd{}}}", j), format!("{}", fd))
         }).collect();
     let args_interp : Vec<String> = cmd[1..].iter()
@@ -161,7 +165,7 @@ fn main() -> Result<(), String> {
         local_addr,
         remote_addr,
         port_pairs,
-        ldesc);
+        lsocks);
 
     // Clean up the subprocess
     println!("Killing child");
