@@ -110,10 +110,10 @@ fn main() -> Result<(), String> {
 
         // Create & configure the sockets
         let (lsock, rsock) = UnixDatagram::pair().unwrap();
-        setsockopt(&lsock, sockopt::RcvBuf, &2000000)
-            .expect("Can't set SO_RCVBUF");
-        setsockopt(&rsock, sockopt::RcvBuf, &2000000)
-            .expect("Can't set SO_RCVBUF");
+        for sock in [&lsock, &rsock] {
+            setsockopt(&sock, sockopt::RcvBuf, &2000000).expect("Can't set SO_RCVBUF");
+            setsockopt(&sock, sockopt::SndBuf, &2000000).expect("Can't set SO_SNDBUF");
+        }
 
         // Add the local descriptor
         lsock.set_nonblocking(true)
