@@ -1,3 +1,11 @@
+/*
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+===================================== IMPORTS =====================================
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+*/
+/*
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> EXTERNAL IMPORTS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+*/
 use std::io::ErrorKind;
 use std::collections::HashMap;
 use std::os::unix::net::{UnixDatagram};
@@ -5,9 +13,18 @@ use std::os::fd::{AsFd};
 use std::net::Ipv4Addr;
 use std::fs::File;
 use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
+use std::cmp::Ordering;
 
+/*
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> INTERNAL IMPORTS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+*/
 use crate::udp::{parse_ipv4_udp_packet, create_ipv4_udp_packet};
 
+/*
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+==================================== MAIN CODE ====================================
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+*/
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct PortPair {
     pub local: u16,
@@ -19,7 +36,7 @@ pub fn forward(outside: UnixDatagram,
     local_addr: Ipv4Addr,
     remote_addr: Ipv4Addr,
     port_pairs: Vec<PortPair>,
-    sockets: Vec<UnixDatagram>,
+    sockets: Vec<UnixDatagram>, // local sockets
 ) {
     assert_eq!(port_pairs.len(), sockets.len());
 
@@ -40,6 +57,7 @@ pub fn forward(outside: UnixDatagram,
         .collect();
 
     // Poll loop
+    // std::thread::sleep(std::time::Duration::from_millis(2000));
     let mut buf : Vec<u8> = vec![0u8; 4096];
 'm: loop {
         poll(&mut poll_fds, PollTimeout::NONE)
@@ -49,70 +67,77 @@ pub fn forward(outside: UnixDatagram,
             if !rev.intersects(PollFlags::POLLIN | PollFlags::POLLHUP) {
                 continue;
             }
-
             // Check the control pipe
-            if j == n + 1 {
-                // Termination signal.  Stop.
+            if j == n + 1 { // Termination signal.  Stop.
                 println!("Control pipe closed");
                 break 'm;
             }
-
             // Process the other FDs
             //
             // For all of them, we're only listening in this loop.
             if !rev.intersects(PollFlags::POLLIN) {
                 continue;
             }
-            if j < n {
-                let sz = sockets[j].recv(&mut buf).expect("recv failed");
-                //println!("Packet of size {} received from FD {}", sz, j);
-                let pkt = create_ipv4_udp_packet(&buf[..sz],
-                    local_addr,
-                    remote_addr,
-                    port_pairs[j].local,
-                    port_pairs[j].remote);
-                match outside.send(&pkt) {
-                    Ok(_) => { },
-                    Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                        println!("drop when sending to outside");
-                    },
-                    Err(ref e) => {
-                        eprintln!("Sending to outside failed: {:?}", e);
-                    },
-                };
-            } else if j == n { // outside
-                let sz = outside.recv(&mut buf).expect("recv failed");
-                //println!("Packet of size {} received from OUTSIDE", sz);
-                match parse_ipv4_udp_packet(&buf[..sz]) {
-                    Some( (src_ip, dst_ip, src_port, dst_port, data) ) => {
-                        if src_ip != remote_addr {
-                            eprintln!("Source IP mismatch.  Expected {}, got {}.",
-                                remote_addr, src_ip);
-                            continue;
-                        }
-                        if dst_ip != local_addr {
-                            eprintln!("Destination IP mismatch.  Expected {}, got {}.",
-                                local_addr, dst_ip);
-                            continue;
-                        }
-                        match pp2idx.get( &PortPair { local: dst_port, remote: src_port } ) {
-                            None => eprintln!("No matching port pair found"),
-                            Some(&idx) => {
-                                match sockets[idx].send(data) {
-                                    Ok(_) => { },
-                                    Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                                        println!("drop when sending to fd{}", idx);
-                                    },
-                                    Err(ref e) => {
-                                      eprintln!("error when sending to fd{}: {:?}", idx, e);
-                                    },
-                                };
+            match j.cmp(&n) {
+                Ordering::Less => {
+                    // j < n: Handle local sockets
+                    let sz = sockets[j].recv(&mut buf).expect("recv failed");
+                    //println!("Packet of size {} received from FD {}", sz, j);
+                    let pkt = create_ipv4_udp_packet(&buf[..sz],
+                        local_addr,
+                        remote_addr,
+                        port_pairs[j].local,
+                        port_pairs[j].remote);
+                    match outside.send(&pkt) {
+                        Ok(_) => { },
+                        Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                            println!("drop when sending to outside");
+                        },
+                        Err(ref e) => {
+                            eprintln!("Sending to outside failed: {:?}", e);
+                        },
+                    };
+                },
+                Ordering::Equal => {
+                    // j == n: Handle outside socket
+                    let sz = outside.recv(&mut buf).expect("recv failed");
+                    //println!("Packet of size {} received from OUTSIDE", sz);
+                    match parse_ipv4_udp_packet(&buf[..sz]) {
+                        Some( (src_ip, dst_ip, src_port, dst_port, data) ) => {
+                            if src_ip != remote_addr {
+                                eprintln!("Source IP mismatch.  Expected {}, got {}.",
+                                    remote_addr, src_ip);
+                                continue;
                             }
-                        }
-                    },
-                    None => {
-                        eprintln!("Invalid packet received on outside");
-                    },
+                            if dst_ip != local_addr {
+                                eprintln!("Destination IP mismatch.  Expected {}, got {}.",
+                                    local_addr, dst_ip);
+                                continue;
+                            }
+                            match pp2idx.get( &PortPair { local: dst_port, remote: src_port } ) {
+                                None => eprintln!("No matching port pair found"),
+                                Some(&idx) => {
+                                    match sockets[idx].send(data) {
+                                        Ok(_) => { },
+                                        Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                                            println!("drop when sending to fd{}", idx);
+                                        },
+                                        Err(ref e) => {
+                                        eprintln!("error when sending to fd{}: {:?}", idx, e);
+                                        },
+                                    };
+                                }
+                            }
+                        },
+                        None => {
+                            eprintln!("Invalid packet received on outside");
+                        },
+                    }
+                },
+                Ordering::Greater => {
+                    // j > n: This case is already handled above (j == n + 1 for control pipe)
+                    // Since you're already handling j == n + 1 before this section,
+                    // this branch should theoretically never be reached in your current logic
                 }
             }
         }

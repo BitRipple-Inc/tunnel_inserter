@@ -169,7 +169,7 @@ mod tests {
     use crate::udp;
 
     fn analyze_pkt(pkt: &[u8]) {
-        match udp::parse_ipv4_udp_packet(&pkt) {
+        match udp::parse_ipv4_udp_packet(pkt) {
             Some((src_ip, dst_ip, src_port, dst_port, payload)) => {
                 println!("Valid IPv4 UDP Packet:");
                 println!("  Source IP: {}", src_ip);
@@ -180,7 +180,7 @@ mod tests {
             }
             None => {
                 println!("Invalid packet.");
-                assert!(false);
+                panic!();
             }
         }
     }
