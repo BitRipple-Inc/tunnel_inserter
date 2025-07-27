@@ -3,6 +3,9 @@ name = "tunnel_inserter"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+path = "src/lib.rs"
+
 [dependencies]
 clap = "4.5.31"
 nix = { version = "0.29.0", features = [ "fs", "poll", "signal", "socket" ] }
