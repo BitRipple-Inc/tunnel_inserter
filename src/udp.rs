@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use std::convert::TryFrom;
 use std::net::Ipv4Addr;
 
 const IPV4_HEADER_LEN: usize = 20;
@@ -10,28 +11,28 @@ pub fn checksum(mut data: &[u8]) -> u16 {
     let mut sum: u32 = 0;
 
     while data.len() >= 2 {
-        sum += u16::from_be_bytes([data[0], data[1]]) as u32;
+        sum += u32::from(u16::from_be_bytes([data[0], data[1]]));
         data = &data[2..];
     }
 
     if !data.is_empty() {
-        sum += (data[0] as u32) << 8;
+        sum += u32::from(data[0]) << 8;
     }
 
     while (sum >> 16) != 0 {
         sum = (sum & 0xFFFF) + (sum >> 16);
     }
 
-    !(sum as u16)
+    !u16::try_from(sum).expect("checksum overflow")
 }
 
 /// Creates a valid IPv4 UDP packet
 pub fn create_ipv4_udp_packet(
-    payload: &[u8], 
-    src_ip: Ipv4Addr,//[u8; 4], 
-    dst_ip: Ipv4Addr,//[u8; 4], 
-    src_port: u16, 
-    dst_port: u16
+    payload: &[u8],
+    src_ip: Ipv4Addr, //[u8; 4],
+    dst_ip: Ipv4Addr, //[u8; 4],
+    src_port: u16,
+    dst_port: u16,
 ) -> Vec<u8> {
     let udp_length = UDP_HEADER_LEN + payload.len();
     let total_length = IPV4_HEADER_LEN + udp_length;
@@ -41,7 +42,11 @@ pub fn create_ipv4_udp_packet(
     // IPv4 Header
     packet[0] = 0x45; // Version (4) + IHL (5)
     packet[1] = 0x00; // DSCP + ECN
-    packet[2..4].copy_from_slice(&(total_length as u16).to_be_bytes()); // Total length
+    packet[2..4].copy_from_slice(
+        &u16::try_from(total_length)
+            .expect("IPv4 packet too long")
+            .to_be_bytes(),
+    ); // Total length
     packet[4..6].copy_from_slice(&0x0000u16.to_be_bytes()); // Identification
     packet[6..8].copy_from_slice(&0x4000u16.to_be_bytes()); // Flags + Fragment offset
     packet[8] = 64; // TTL
@@ -57,7 +62,11 @@ pub fn create_ipv4_udp_packet(
     let udp_offset = IPV4_HEADER_LEN;
     packet[udp_offset..udp_offset + 2].copy_from_slice(&src_port.to_be_bytes());
     packet[udp_offset + 2..udp_offset + 4].copy_from_slice(&dst_port.to_be_bytes());
-    packet[udp_offset + 4..udp_offset + 6].copy_from_slice(&(udp_length as u16).to_be_bytes());
+    packet[udp_offset + 4..udp_offset + 6].copy_from_slice(
+        &u16::try_from(udp_length)
+            .expect("UDP segment too long")
+            .to_be_bytes(),
+    );
 
     // Copy Payload
     let payload_offset = udp_offset + UDP_HEADER_LEN;
@@ -70,8 +79,13 @@ pub fn create_ipv4_udp_packet(
         pseudo_header.extend_from_slice(&dst_ip.octets());
         pseudo_header.push(0); // Zero byte
         pseudo_header.push(17); // Protocol (UDP)
-        pseudo_header.extend_from_slice(&(udp_length as u16).to_be_bytes());
-        pseudo_header.extend_from_slice(&packet[udp_offset..udp_offset + UDP_HEADER_LEN + payload.len()]);
+        pseudo_header.extend_from_slice(
+            &u16::try_from(udp_length)
+                .expect("UDP segment too long")
+                .to_be_bytes(),
+        );
+        pseudo_header
+            .extend_from_slice(&packet[udp_offset..udp_offset + UDP_HEADER_LEN + payload.len()]);
 
         let udp_checksum = checksum(&pseudo_header);
         packet[udp_offset + 6..udp_offset + 8].copy_from_slice(&udp_checksum.to_be_bytes());
@@ -92,19 +106,20 @@ pub fn parse_ipv4_udp_packet(packet: &[u8]) -> Option<(Ipv4Addr, Ipv4Addr, u16, 
     // Extract IPv4 Header Fields
     let ihl = (packet[0] & 0x0F) as usize * 4;
     if ihl < IPV4_HEADER_LEN {
-        println!("Invalid IPv4 header length: {}", ihl);
+        println!("Invalid IPv4 header length: {ihl}");
         return None;
     }
 
     let total_length = u16::from_be_bytes([packet[2], packet[3]]) as usize;
     if total_length != packet.len() {
-        println!("Packet length mismatch: Expected {}, Found {}", total_length, packet.len());
+        let pkt_len = packet.len();
+        println!("Packet length mismatch: Expected {total_length}, Found {pkt_len}");
         return None;
     }
 
     let protocol = packet[9];
     if protocol != 17 {
-        println!("Not a UDP packet (protocol = {}).", protocol);
+        println!("Not a UDP packet (protocol = {protocol}).");
         return None;
     }
 
@@ -114,7 +129,7 @@ pub fn parse_ipv4_udp_packet(packet: &[u8]) -> Option<(Ipv4Addr, Ipv4Addr, u16, 
     // Verify IPv4 Header Checksum
     let ip_checksum = checksum(&packet[..ihl]);
     if ip_checksum != 0 {
-        println!("Invalid IPv4 header checksum: {}", ip_checksum);
+        println!("Invalid IPv4 header checksum: {ip_checksum}");
         return None;
     }
 
@@ -126,8 +141,8 @@ pub fn parse_ipv4_udp_packet(packet: &[u8]) -> Option<(Ipv4Addr, Ipv4Addr, u16, 
 
     if udp_length < UDP_HEADER_LEN || udp_offset + udp_length > packet.len() {
         println!(
-            "UDP length mismatch: Expected {}, Packet size {}", 
-            udp_length, 
+            "UDP length mismatch: Expected {}, Packet size {}",
+            udp_length,
             packet.len()
         );
         return None;
@@ -143,15 +158,17 @@ pub fn parse_ipv4_udp_packet(packet: &[u8]) -> Option<(Ipv4Addr, Ipv4Addr, u16, 
         pseudo_header.extend_from_slice(&dst_ip.octets());
         pseudo_header.push(0);
         pseudo_header.push(17); // Protocol (UDP)
-        pseudo_header.extend_from_slice(&(udp_length as u16).to_be_bytes());
+        pseudo_header.extend_from_slice(
+            &u16::try_from(udp_length)
+                .expect("UDP segment too long")
+                .to_be_bytes(),
+        );
         pseudo_header.extend_from_slice(&packet[udp_offset..udp_offset + udp_length]);
 
         let computed_udp_checksum = checksum(&pseudo_header);
         if udp_checksum != 0 && computed_udp_checksum != 0 {
             println!(
-                "Invalid UDP checksum: Expected {}, Computed {}", 
-                udp_checksum, 
-                computed_udp_checksum
+                "Invalid UDP checksum: Expected {udp_checksum}, Computed {computed_udp_checksum}"
             );
             return None;
         }
@@ -165,8 +182,8 @@ pub fn parse_ipv4_udp_packet(packet: &[u8]) -> Option<(Ipv4Addr, Ipv4Addr, u16, 
 #[cfg(test)]
 mod tests {
 
-    use crate::Ipv4Addr;
     use crate::udp;
+    use crate::Ipv4Addr;
 
     fn analyze_pkt(pkt: &[u8]) {
         match udp::parse_ipv4_udp_packet(pkt) {
@@ -189,11 +206,12 @@ mod tests {
     fn example_raw_decode() {
         // Example raw UDP packet (in hex)
         let raw_packet: Vec<u8> = vec![
-            0x45, 0x00, 0x00, 0x22, 0x00, 0x00, 0x40, 0x00, 0x40, 0x11, 0xB7, 0x15, // IPv4 Header (example)
+            0x45, 0x00, 0x00, 0x22, 0x00, 0x00, 0x40, 0x00, 0x40, 0x11, 0xB7,
+            0x15, // IPv4 Header (example)
             192, 168, 1, 100, // Source IP
-            192, 168, 1, 1,   // Destination IP
+            192, 168, 1, 1, // Destination IP
             0x30, 0x39, 0x00, 0x50, 0x00, 0x0E, 0x00, 0x00, // UDP Header (example)
-            72, 101, 108, 108, 111, 33 // "Hello!"
+            72, 101, 108, 108, 111, 33, // "Hello!"
         ];
 
         analyze_pkt(&raw_packet);
@@ -201,7 +219,6 @@ mod tests {
 
     #[test]
     fn example_encapsulate_decapsulate() {
-
         // other way.
         let payload = b"Hello, UDP!";
         let src_ip = Ipv4Addr::new(192, 168, 1, 100);

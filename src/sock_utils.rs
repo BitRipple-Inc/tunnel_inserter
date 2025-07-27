@@ -1,7 +1,7 @@
-use std::os::unix::io::{RawFd};
 use nix::fcntl::{fcntl, FcntlArg, FdFlag};
+use std::os::unix::io::RawFd;
 
-/// Set or clear the FD_CLOEXEC flag on a file descriptor
+/// Set or clear the `FD_CLOEXEC` flag on a file descriptor
 pub fn set_cloexec(fd: RawFd, enable: bool) {
     let flags = fcntl(fd, FcntlArg::F_GETFD).expect("fcntl failed"); // Get current flags
     let new_flags = if enable {
