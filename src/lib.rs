@@ -1,19 +1,9 @@
-//! Library version of tunnel_inserter.
-//!
-//! The original crate exposed a binary that was called from other
-//! applications.  The binary parsed command line arguments and then
-//! started the forwarding logic as well as a subprocess running the
-//! BitRipple/Axl tunnel.  This file exposes the same functionality in a
-//! library friendly way so that users can create a `TunnelInserter`
-//! directly without spawning a separate process.
-
 use std::collections::HashMap;
 use std::fs::File;
 use std::net::Ipv4Addr;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::os::unix::net::UnixDatagram;
 
-use nix::sys::signal::{sigaction, SaFlags, SigAction, SigHandler, SigSet, Signal};
 use nix::sys::socket::{setsockopt, sockopt};
 
 use axl::{axl_tunnel_app, TunnelArgs};
@@ -42,44 +32,58 @@ pub struct TunnelInserterConfig {
 }
 
 fn build_tunnel_args(args: &[String]) -> TunnelArgs {
-    let matches = Command::new("axl")
-        .arg(Arg::new("config").short('c').long("config").num_args(1))
-        .arg(
-            Arg::new("config-item")
-                .short('x')
-                .long("config-item")
-                .num_args(1)
-                .action(ArgAction::Append),
-        )
-        .arg(Arg::new("log-filter").long("log-filter").num_args(1))
-        .arg(Arg::new("log-format").long("log-format").num_args(1))
-        .arg(Arg::new("log-format-perror").long("log-format-perror").num_args(1))
-        .arg(Arg::new("bind").short('b').long("bind").num_args(1))
-        .arg(Arg::new("tun-dev").short('t').long("tun-dev").num_args(1))
-        .arg(Arg::new("tunnel-block-timeout-ms").short('d').num_args(1))
-        .arg(Arg::new("tunnel-block-inactivity-timeout-ms").short('D').num_args(1))
-        .arg(Arg::new("tunnel-ordering-timeout-ms").short('q').num_args(1))
-        .get_matches_from(args);
+  let matches = Command::new("axl")
+    .arg(Arg::new("config").short('c').long("config").num_args(1))
+    .arg(
+      Arg::new("config-item")
+        .short('x')
+        .long("config-item")
+        .num_args(1)
+        .action(ArgAction::Append),
+    )
+    .arg(Arg::new("log-filter").long("log-filter").num_args(1))
+    .arg(Arg::new("log-format").long("log-format").num_args(1))
+    .arg(
+      Arg::new("log-format-perror")
+        .long("log-format-perror")
+        .num_args(1),
+    )
+    .arg(Arg::new("bind").short('b').long("bind").num_args(1))
+    .arg(Arg::new("tun-dev").short('t').long("tun-dev").num_args(1))
+    .arg(Arg::new("tunnel-block-timeout-ms").short('d').num_args(1))
+    .arg(
+      Arg::new("tunnel-block-inactivity-timeout-ms")
+        .short('D')
+        .num_args(1),
+    )
+    .arg(
+      Arg::new("tunnel-ordering-timeout-ms")
+        .short('q')
+        .num_args(1),
+    )
+    .get_matches_from(args);
 
-    TunnelArgs {
-        config: matches.get_one::<String>("config").cloned(),
-        config_item: matches
-            .get_many::<String>("config-item")
-            .map(|vals| vals.cloned().collect())
-            .unwrap_or_default(),
-        log_filter: matches.get_one::<String>("log-filter").cloned(),
-        log_format: matches.get_one::<String>("log-format").cloned(),
-        log_format_perror: matches.get_one::<String>("log-format-perror").cloned(),
-        bind: matches.get_one::<String>("bind").cloned(),
-        tun_dev: matches.get_one::<String>("tun-dev").cloned(),
-        tunnel_block_timeout_ms: matches.get_one::<String>("tunnel-block-timeout-ms").cloned(),
-        tunnel_block_inactivity_timeout_ms: matches
-            .get_one::<String>("tunnel-block-inactivity-timeout-ms")
-            .cloned(),
-        tunnel_ordering_timeout_ms: matches
-            .get_one::<String>("tunnel-ordering-timeout-ms")
-            .cloned(),
-    }
+  TunnelArgs {
+    config: matches.get_one::<String>("config").cloned(),
+    config_item: matches
+      .get_many::<String>("config-item")
+      .map(|vals| vals.cloned().collect())
+      .unwrap_or_default(),
+    log_filter: matches.get_one::<String>("log-filter").cloned(),
+    log_format: matches.get_one::<String>("log-format").cloned(),
+    log_format_perror: matches.get_one::<String>("log-format-perror").cloned(),
+    bind: matches.get_one::<String>("bind").cloned(),
+    tun_dev: matches.get_one::<String>("tun-dev").cloned(),
+    tunnel_block_timeout_ms: matches
+      .get_one::<String>("tunnel-block-timeout-ms")
+      .cloned(),
+    tunnel_block_inactivity_timeout_ms: matches
+      .get_one::<String>("tunnel-block-inactivity-timeout-ms")
+      .cloned(),
+    tunnel_ordering_timeout_ms: matches
+      .get_one::<String>("tunnel-ordering-timeout-ms")
+      .cloned(),
+  }
 }
 
 /// Tunnel inserter logic which was previously implemented in `main.rs`.
@@ -172,19 +176,6 @@ impl TunnelInserter {
     let handle = std::thread::spawn(move || {
       axl_tunnel_app(&tunnel_args);
     });
-
-    // Ignore termination signals so that the caller controls shutdown via the
-    // control pipe.
-    unsafe {
-      sigaction(
-        Signal::SIGINT,
-        &SigAction::new(SigHandler::SigIgn, SaFlags::empty(), SigSet::empty()),
-      )
-      .expect("sigaction failed");
-    };
-
-    // Close unused remote sockets in this process.
-    drop(rsocks);
 
     // Start the forwarding logic.
     forward(
