@@ -6,9 +6,17 @@
     flake-utils.url = "github:numtide/flake-utils";
     axlrust.url = "git+ssh://git@github.com/BitRipple-Inc/AxlRust.git";
     axlrust.flake = false;
+    axl = {
+      url = "git+ssh://git@github.com/BitRipple-Inc/Axl.git";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    csnip = {
+      url = "git+ssh://git@github.com/lorinder/csnip.git";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, flake-utils, axlrust }:
+  outputs = { self, nixpkgs, flake-utils, axlrust, axl, csnip }:
     flake-utils.lib.eachDefaultSystem (system: let
       pkgs = import nixpkgs {
         inherit system;
@@ -27,8 +35,34 @@
           };
           nativeBuildInputs = with pkgs; [
             lsof
+            clang
+            llvmPackages.libclang
+            pkgconf
           ];
-	};
+
+          buildInputs = [
+            axl.outputs.packages.${system}.default
+            csnip.outputs.packages.${system}.default
+          ];
+
+          LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
+        };
+      };
+
+      devShells = {
+        default = pkgs.mkShell {
+          inputsFrom = [ self.packages.${system}.default ];
+          nativeBuildInputs = with pkgs; [
+            cargo
+            rustc
+            clippy
+            rustfmt
+          ];
+          LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
+          shellHook = ''
+            export LD_LIBRARY_PATH=${pkgs.llvmPackages.libclang.lib}/lib:$LD_LIBRARY_PATH
+          '';
+        };
       };
     });
 }
