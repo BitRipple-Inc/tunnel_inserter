@@ -1,5 +1,17 @@
 {
   "nodes": {
+    "axlrust": {
+      "flake": false,
+      "locked": {
+        "path": "git+ssh//:git@github.com/BitRipple-Inc/AxlRust.git",
+        "type": "path"
+      },
+      "original": {
+        "path": "git+ssh//:git@github.com/BitRipple-Inc/AxlRust.git",
+        "type": "path"
+      },
+      "parent": []
+    },
     "flake-utils": {
       "inputs": {
         "systems": "systems"
@@ -35,6 +47,7 @@
     },
     "root": {
       "inputs": {
+        "axlrust": "axlrust",
         "flake-utils": "flake-utils",
         "nixpkgs": "nixpkgs"
       }

@@ -8,4 +8,5 @@ path = "src/lib.rs"
 
 [dependencies]
 clap = "4.5.31"
-nix = { version = "0.29.0", features = [ "fs", "poll", "signal", "socket" ] }
+nix = { version = "0.29.0", features = ["fs", "poll", "signal", "socket"] }
+axlrust = { path = "../AxlRust" }

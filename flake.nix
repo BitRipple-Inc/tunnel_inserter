@@ -4,9 +4,11 @@
   inputs = {
     nixpkgs.url = "nixpkgs/nixos-24.11";
     flake-utils.url = "github:numtide/flake-utils";
+    axlrust.url = "git+ssh//:git@github.com/BitRipple-Inc/AxlRust.git";
+    axlrust.flake = false;
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
+  outputs = { self, nixpkgs, flake-utils, axlrust }:
     flake-utils.lib.eachDefaultSystem (system: let
       pkgs = import nixpkgs {
         inherit system;
@@ -16,10 +18,14 @@
         default = pkgs.rustPlatform.buildRustPackage rec {
           name = "tunnel_inserter";
           # version = 0.1.0;
-	  src = ./.;
+          src = ./.;
+          postPatch = ''
+            ln -s ${axlrust} ../AxlRust
+          '';
           cargoLock = {
             lockFile = ./Cargo.lock;
             outputHashes = {
+              "axlrust-0.1.0" = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
             };
           };
           nativeBuildInputs = with pkgs; [
