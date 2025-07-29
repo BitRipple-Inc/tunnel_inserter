@@ -3,14 +3,18 @@
     "axlrust": {
       "flake": false,
       "locked": {
-        "path": "git+ssh//:git@github.com/BitRipple-Inc/AxlRust.git",
-        "type": "path"
+        "lastModified": 1753600529,
+        "narHash": "sha256-rAGtfX+UrSw3vfB4VSm9IwiDCB56j8Jzi4lRr6CTrdk=",
+        "ref": "refs/heads/main",
+        "rev": "fb0e2a09543a10bd0f25f3045d1624292dfdf7f8",
+        "revCount": 42,
+        "type": "git",
+        "url": "ssh://git@github.com/BitRipple-Inc/AxlRust.git"
       },
       "original": {
-        "path": "git+ssh//:git@github.com/BitRipple-Inc/AxlRust.git",
-        "type": "path"
-      },
-      "parent": []
+        "type": "git",
+        "url": "ssh://git@github.com/BitRipple-Inc/AxlRust.git"
+      }
     },
     "flake-utils": {
       "inputs": {
@@ -32,16 +36,16 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1740463929,
-        "narHash": "sha256-4Xhu/3aUdCKeLfdteEHMegx5ooKQvwPHNkOgNCXQrvc=",
+        "lastModified": 1753489912,
+        "narHash": "sha256-uDCFHeXdRIgJpYmtcUxGEsZ+hYlLPBhR83fdU+vbC1s=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "5d7db4668d7a0c6cc5fc8cf6ef33b008b2b1ed8b",
+        "rev": "13e8d35b7d6028b7198f8186bc0347c6abaa2701",
         "type": "github"
       },
       "original": {
         "id": "nixpkgs",
-        "ref": "nixos-24.11",
+        "ref": "nixos-25.05",
         "type": "indirect"
       }
     },

@@ -2,9 +2,9 @@
   description = "Tool to wrap the BitRipple tunnel into another tunnel";
 
   inputs = {
-    nixpkgs.url = "nixpkgs/nixos-24.11";
+    nixpkgs.url = "nixpkgs/nixos-25.05";
     flake-utils.url = "github:numtide/flake-utils";
-    axlrust.url = "git+ssh//:git@github.com/BitRipple-Inc/AxlRust.git";
+    axlrust.url = "git+ssh://git@github.com/BitRipple-Inc/AxlRust.git";
     axlrust.flake = false;
   };
 
