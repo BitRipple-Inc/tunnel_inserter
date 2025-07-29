@@ -24,9 +24,6 @@
           '';
           cargoLock = {
             lockFile = ./Cargo.lock;
-            outputHashes = {
-              "axlrust-0.1.0" = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-            };
           };
           nativeBuildInputs = with pkgs; [
             lsof
