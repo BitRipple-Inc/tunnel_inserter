@@ -173,9 +173,11 @@ impl TunnelInserter {
 
     // Build tunnel arguments and run the tunnel in a separate thread.
     let tunnel_args = build_tunnel_args(&args_interp);
+    println!("Before running axl: {:?}", &argmap);
     let handle = std::thread::spawn(move || {
       axl_tunnel_app(&tunnel_args);
     });
+    println!("Successfully ran axl");
 
     // Start the forwarding logic.
     forward(
