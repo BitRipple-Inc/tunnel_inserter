@@ -17,6 +17,7 @@ use crate::forward::{forward, PortPair};
 use crate::sock_utils::set_cloexec;
 
 /// Configuration for [`TunnelInserter`].
+#[derive(Debug)]
 pub struct TunnelInserterConfig {
   pub outside_fd: i32,
   pub control_fd: i32,
@@ -173,11 +174,9 @@ impl TunnelInserter {
 
     // Build tunnel arguments and run the tunnel in a separate thread.
     let tunnel_args = build_tunnel_args(&args_interp);
-    println!("Before running axl: {:?}", &argmap);
     let handle = std::thread::spawn(move || {
       axl_tunnel_app(&tunnel_args);
     });
-    println!("Successfully ran axl");
 
     // Start the forwarding logic.
     forward(
