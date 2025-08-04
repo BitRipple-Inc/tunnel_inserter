@@ -25,7 +25,7 @@
       packages = {
         default = pkgs.rustPlatform.buildRustPackage rec {
           name = "tunnel_inserter";
-          # version = 0.1.0;
+          version = "0.1.0";
           src = ./.;
           postPatch = ''
             ln -s ${axlrust} ../AxlRust
